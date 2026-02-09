@@ -39,8 +39,6 @@ Wait for: `Application startup complete`
 
 **Remember the exact model name shown!**
 
-**Note**: For Qwen3 and DeepSeek-R1 models, the server automatically enables `--reasoning-parser qwen3` to properly separate reasoning tokens from final answers.
-
 ---
 
 ### Step 2: Configure Environment
