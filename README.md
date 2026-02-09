@@ -1,0 +1,366 @@
+# Math Strategy Pipeline
+
+**End-to-end pipeline for strategy-guided mathematical problem solving using three-path retrieval and knowledge graphs.**
+
+## Quick Start (3 Steps)
+
+### Step 1: Start vLLM Server
+
+Open a terminal and run:
+```bash
+cd math_strategy_pipeline
+bash scripts/start_vllm_server.sh
+```
+
+Select a model when prompted (option 1 recommended):
+```
+1) Qwen/Qwen3-8B       ← Recommended
+2) Qwen/Qwen3-14B
+3) deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+```
+
+Wait for: `Application startup complete`
+
+**Remember the exact model name shown!**
+
+**Note**: For Qwen3 and DeepSeek-R1 models, the server automatically enables `--reasoning-parser qwen3` to properly separate reasoning tokens from final answers.
+
+---
+
+### Step 2: Configure Environment
+
+Open a new terminal and run:
+```bash
+cd math_strategy_pipeline
+
+# Set model name (must match Step 1!)
+export VLLM_MODEL="Qwen/Qwen3-8B"
+
+# Set OpenAI API key (for answer judging)
+export OPENAI_API_KEY="sk-your-key-here"
+
+# Check which knowledge graph is loaded
+python check_kg.py
+
+# Verify setup
+python verify_setup.py
+```
+
+Expected output:
+- KG check shows which model is loaded (pre-trained or newly trained)
+- Setup verification: `✅ All checks passed!`
+
+---
+
+### Step 3: Run Tests
+
+```bash
+# Test on AIME 2025 (30 problems)
+python tests/test_aime25_accuracy.py
+
+# Test on APEX (shortlist problems)
+python tests/test_apex_accuracy.py
+```
+
+Results saved to:
+- `aime25_results.json`
+- `apex_shortlist_results_v2.json`
+
+---
+
+## What's Included
+
+### Pre-trained Models (Option A - Recommended)
+The pipeline includes pre-trained knowledge graph files (9 files, ~140 MB total):
+- `strategy_kg.pkl` - Knowledge graph with 4932 problems, 43,472 strategies, 30 templates
+- `gnn_model.pth` - Trained Graph Neural Network
+- `strategy_classifier.pkl` - Strategy suitability classifier
+- `*_emb.npy` - 6 embedding files (semantic + structural)
+
+
+**You can start testing immediately without training!**
+
+### Training from New Dataset (Option B)
+Alternatively, train your own knowledge graph from the provided dataset:
+- `data/strategy_dataset_full.json` - 4850 problems with human & model strategies
+- See "Training from Scratch" section below
+
+---
+
+## System Architecture
+
+### Three-Path Retrieval System
+
+The system retrieves relevant problem-solving strategies using three complementary approaches:
+
+1. **Path A** (Similar Problems): Find similar problems → retrieve their strategies
+2. **Path B** (Template-based): Similar problems → structural embeddings → templates → strategies
+3. **Path C** (Direct Matching): Semantic similarity between query and all strategies
+
+Final ranking combines all three paths with diversity control.
+
+### Strategy Templates
+
+30 predefined templates across 6 categories:
+- **Coordinate Methods**: coordinate systems, vectors, complex numbers
+- **Geometric Methods**: auxiliary constructions, similarity, angle chasing
+- **Number Theory**: prime factorization, modular arithmetic, GCD/LCM
+- **Combinatorial**: counting principles, inclusion-exclusion, pigeonhole
+- **Algebraic**: manipulation, inequalities, polynomials
+- **Other**: induction, extremal principle, probabilistic methods
+
+---
+
+## Training from Scratch (Optional - Option B)
+
+If you want to train your own knowledge graph instead of using pre-trained models:
+
+### Step 1: Prepare Your Data
+
+The system supports **two data formats**:
+
+**Format 1: Simple strings (default in provided dataset)**
+```json
+{
+  "metadata": {
+    "total_problems": 4850,
+    "total_human_strategies": 4850,
+    "total_model_strategies": 4850
+  },
+  "data": [
+    {
+      "problem_id": "example_001",
+      "problem_text": "Find the number of...",
+      "subject": "number_theory",
+      "answer": "42",
+      "human_strategies": [
+        "Use prime factorization to analyze..."
+      ],
+      "model_strategies": [
+        "Enumerate all cases systematically..."
+      ]
+    }
+  ]
+}
+```
+
+**Format 2: Objects with metadata (hybrid_kg_system format)**
+```json
+{
+  "data": [
+    {
+      "problem_id": "example_001",
+      "problem_text": "Find the number of...",
+      "problem_subject": "number_theory",
+      "problem_level": 5,
+      "solution": "Solution steps...",
+      "human_strategies": [
+        {
+          "strategy_text": "Use prime factorization...",
+          "template_name": "prime_factorization",
+          "template_category": "number_theory",
+          "template_description": "Factorize into primes..."
+        }
+      ],
+      "model_strategies": [...]
+    }
+  ]
+}
+```
+
+The system **automatically detects** which format you're using.
+
+Place your data file at `data/strategy_dataset_full.json`
+
+### Step 2: (Optional) Add Source Preference
+
+If you have historical results comparing human vs model strategies, you can optimize retrieval:
+
+1. Prepare two JSON files:
+   - `preference_human.json` - Results using human strategies
+   - `preference_model.json` - Results using model strategies
+
+2. Each file should contain:
+```json
+{
+  "results": [
+    {
+      "problem": "Problem text...",
+      "strategies": [{"strategy": "Strategy text...", "source": "human"}],
+      "is_correct": true,
+      "model_answer": "42",
+      "ground_truth": "42"
+    }
+  ],
+  "statistics": {
+    "accuracy": 85.5,
+    "correct": 855,
+    "total_problems": 1000
+  }
+}
+```
+
+3. Edit `src/build_kg.py` (lines 268-272):
+```python
+kg.load_data_from_final_dataset(
+    dataset_path='data/strategy_dataset_full.json',
+    human_path='preference_human.json',  # Add this
+    model_path='preference_model.json'   # Add this
+)
+```
+
+### Step 3: Train
+
+```bash
+cd math_strategy_pipeline
+python src/build_kg.py
+```
+
+**Output**: 9 files that will **replace** the pre-trained files:
+- Training time: ~10-20 minutes (depending on dataset size)
+- Files saved to root directory: `strategy_kg.pkl`, `gnn_model.pth`, etc.
+
+---
+
+## Configuration
+
+### Supported Models
+
+| Model | Name String | GPU Memory |
+|-------|------------|------------|
+| Qwen3-8B | `Qwen/Qwen3-8B` | ~16GB |
+| Qwen3-14B | `Qwen/Qwen3-14B` | ~28GB |
+| DeepSeek-R1 | `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B` | ~14GB |
+
+### Environment Variables
+
+```bash
+# Required
+export OPENAI_API_KEY="sk-..."          # For GPT-5.1 judging
+
+# Optional (defaults shown)
+export VLLM_MODEL="Qwen/Qwen3-8B"       # Model name
+export VLLM_BASE_URL="http://localhost:8000/v1"
+export OPENAI_MODEL_JUDGE="gpt-5.1"     # Judging model
+```
+
+### Model Configuration
+
+**Method 1: Environment Variable (Recommended)**
+```bash
+export VLLM_MODEL="Qwen/Qwen3-8B"
+python tests/test_aime25_accuracy.py
+```
+
+**Method 2: Edit Test Script**
+```python
+# In tests/test_aime25_accuracy.py, line 54:
+MODEL_NAME = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-8B")
+#                                          ^^^^^^^^^^^^^^
+#                                          Change this
+```
+
+---
+
+## Directory Structure
+
+```
+math_strategy_pipeline/
+├── README.md                   # This file
+├── START.md                    # Quick start guide
+├── verify_setup.py             # Setup verification script
+├── quick_test.py               # Quick system test
+│
+├── src/                        # Core source code
+│   ├── strategy_kg.py          # Knowledge graph
+│   ├── build_kg.py             # Build KG from full dataset
+│   ├── retriever_v2.py         # Three-path retrieval
+│   └── split_dataset_unique.py # Dataset splitting
+│
+├── tests/                      # Test scripts
+│   ├── test_aime25_accuracy.py # AIME 2025 test
+│   ├── test_apex_accuracy.py   # APEX test
+│   └── test_hmreasoning.py     # HMReasoningBench test
+│
+├── scripts/                    # Utility scripts
+│   └── start_vllm_server.sh    # Start vLLM server
+│
+├── data/                       # Data files
+│   └── strategy_dataset_full.json  # Strategy dataset (4850 problems)
+│
+└── Pre-trained files (9 files in root)
+    ├── strategy_kg.pkl
+    ├── gnn_model.pth
+    └── *_emb.npy (6 files)
+```
+
+---
+
+## Benchmarks
+
+### Supported Datasets
+
+| Dataset | Problems | Split Required? |
+|---------|----------|----------------|
+| AIME 2025 | 30 | No |
+| APEX | ~100 | No |
+| HMReasoningBench | 4850 | Yes (train/test) |
+
+
+## Advanced Usage
+
+### Custom Retrieval Parameters
+
+Edit test scripts to adjust retrieval:
+```python
+strategies = retriever.retrieve(
+    problem_text=prob['problem'],
+    k=7,                        # Retrieve 7 strategies (default: 5)
+    preferred_source='human',   # Prefer human strategies
+    diversity_control=True,     # Enable diversity
+    semantic_weight=0.6,        # Adjust weights
+    structural_weight=0.4
+)
+```
+
+### HMReasoningBench with Train/Test Split
+
+To prevent data leakage:
+```bash
+bash scripts/run_hmreasoning.sh
+```
+
+This script:
+1. Splits dataset into train (4750) and test (100)
+2. Builds KG from train set only
+3. Tests on test set
+4. Verifies no leakage
+
+---
+
+## Requirements
+
+```bash
+pip install torch torch-geometric sentence-transformers datasets openai aiohttp tqdm scikit-learn numpy
+```
+
+See `requirements.txt` for specific versions.
+
+---
+
+## License
+
+MIT License
+
+---
+
+## Support
+
+For issues or questions:
+1. Run `python verify_setup.py` to diagnose problems
+2. Check `START.md` for quick start guide
+3. Review troubleshooting section above
+
+---
+
+**Ready to start? Run the 3 steps at the top!** 🚀

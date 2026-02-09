@@ -1,0 +1,30 @@
+# Math Strategy Pipeline Requirements
+
+# Core dependencies
+torch>=2.0.0
+torch-geometric>=2.3.0
+sentence-transformers>=2.2.0
+scikit-learn>=1.0.0
+numpy>=1.21.0
+
+# OpenAI API
+openai>=1.30.0
+
+# HTTP and async
+aiohttp>=3.8.0
+requests>=2.28.0
+
+# Dataset loading
+datasets>=2.12.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Optional: For better performance
+faiss-cpu>=1.7.0  # or faiss-gpu for GPU acceleration
+
+# Development (optional)
+jupyter>=1.0.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+pandas>=1.5.0
