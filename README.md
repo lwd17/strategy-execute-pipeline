@@ -86,7 +86,7 @@ Results saved to:
 
 ### Pre-trained Models (Option A - Recommended)
 The pipeline includes pre-trained knowledge graph files (9 files, ~140 MB total):
-- `strategy_kg.pkl` - Knowledge graph with 4932 problems, 43,472 strategies, 30 templates
+- `strategy_kg.pkl` - Knowledge graph
 - `gnn_model.pth` - Trained Graph Neural Network
 - `strategy_classifier.pkl` - Strategy suitability classifier
 - `*_emb.npy` - 6 embedding files (semantic + structural)
